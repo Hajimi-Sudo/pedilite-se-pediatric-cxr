@@ -106,6 +106,11 @@ coverage are provided as separate configs:
    Both protocols keep the corrected split, validation-only model selection,
    and the prespecified three seeds.
 
+   `configs/recent_models_weighted_3seed.json` additionally evaluates recent
+   strong reference architectures available in the pinned environment:
+   ConvNeXt-Tiny, Swin-T, and EfficientNetV2-S. These are reported as modern
+   reference architectures rather than an unqualified state-of-the-art claim.
+
 6. Use [`scripts/12_harden_results.py`](scripts/12_harden_results.py),
    [`scripts/14_seed_stats.py`](scripts/14_seed_stats.py), and
    [`scripts/18_diagnostic_metrics.py`](scripts/18_diagnostic_metrics.py) for

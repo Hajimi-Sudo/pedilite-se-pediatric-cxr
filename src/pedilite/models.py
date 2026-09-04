@@ -154,7 +154,15 @@ def build_model(name: str, num_classes: int, dropout: float = 0.2, pretrained_ba
     if name.startswith("pedilite_"):
         attention, width_mult = parse_pedilite_name(name)
         return PediLiteAttnNet(num_classes=num_classes, attention=attention, dropout=dropout, width_mult=width_mult)
-    if name in {"mobilenet_v3_small", "efficientnet_b0", "densenet121", "resnet50"}:
+    if name in {
+        "mobilenet_v3_small",
+        "efficientnet_b0",
+        "efficientnet_v2_s",
+        "convnext_tiny",
+        "swin_t",
+        "densenet121",
+        "resnet50",
+    }:
         try:
             import torchvision.models as tvm
         except Exception as exc:
@@ -168,6 +176,21 @@ def build_model(name: str, num_classes: int, dropout: float = 0.2, pretrained_ba
             weights = tvm.EfficientNet_B0_Weights.DEFAULT if pretrained_baselines else None
             model = tvm.efficientnet_b0(weights=weights)
             model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
+            return model
+        if name == "efficientnet_v2_s":
+            weights = tvm.EfficientNet_V2_S_Weights.DEFAULT if pretrained_baselines else None
+            model = tvm.efficientnet_v2_s(weights=weights)
+            model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
+            return model
+        if name == "convnext_tiny":
+            weights = tvm.ConvNeXt_Tiny_Weights.DEFAULT if pretrained_baselines else None
+            model = tvm.convnext_tiny(weights=weights)
+            model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
+            return model
+        if name == "swin_t":
+            weights = tvm.Swin_T_Weights.DEFAULT if pretrained_baselines else None
+            model = tvm.swin_t(weights=weights)
+            model.head = nn.Linear(model.head.in_features, num_classes)
             return model
         if name == "densenet121":
             weights = tvm.DenseNet121_Weights.DEFAULT if pretrained_baselines else None
