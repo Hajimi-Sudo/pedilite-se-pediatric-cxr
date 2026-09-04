@@ -81,8 +81,8 @@ def evaluate_run(run_dir: Path, dataset: VinDrPCXRDataset, device_name: str, bat
     config = load_json(run_dir / "config_resolved.json")
     stored_metrics = load_json(run_dir / "metrics.json")
     class_names = list(config.get("class_names", ["normal", "viral_pneumonia", "bacterial_pneumonia"]))
-    if len(class_names) != 3 or "normal" not in class_names:
-        raise ValueError(f"expected a three-class run, got class_names={class_names}")
+    if len(class_names) not in {2, 3} or "normal" not in class_names:
+        raise ValueError(f"expected a binary or three-class run, got class_names={class_names}")
 
     model = build_model(
         str(config["model"]),

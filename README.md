@@ -90,7 +90,23 @@ install the remaining requirements.
      --config configs/viral_recall_weighted_no_se_3seed.json
    ```
 
-5. Use [`scripts/12_harden_results.py`](scripts/12_harden_results.py),
+5. Optional follow-up protocols for external transportability and baseline
+coverage are provided as separate configs:
+
+   ```bash
+   PYTHONPATH=src python scripts/02_run_experiment.py \
+     --config configs/external_binary_source_3seed.json
+   PYTHONPATH=src python scripts/02_run_experiment.py \
+     --config configs/corrected_baselines_weighted_3seed.json
+   ```
+
+   The first trains task-aligned binary source models for frozen VinDr-PCXR
+   evaluation; it does not create viral-versus-bacterial labels on VinDr. The
+   second adds matched small-CNN, ECA, CBAM, and EfficientNet-B0 comparisons.
+   Both protocols keep the corrected split, validation-only model selection,
+   and the prespecified three seeds.
+
+6. Use [`scripts/12_harden_results.py`](scripts/12_harden_results.py),
    [`scripts/14_seed_stats.py`](scripts/14_seed_stats.py), and
    [`scripts/18_diagnostic_metrics.py`](scripts/18_diagnostic_metrics.py) for
    frozen-test summaries. Threshold selection, if used, must be fitted on

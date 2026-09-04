@@ -1,0 +1,23 @@
+{
+  "run_name": "external_binary_source",
+  "data_root": "CHANGE_ME_TO_CORRECTED_SPLIT_PATH",
+  "label_mode": "binary",
+  "image_size": 224,
+  "models": ["pedilite_se", "mobilenet_v3_small"],
+  "seeds": [42, 2026, 3407],
+  "num_epochs": 30,
+  "checkpoint_metric": "val_macro_f1",
+  "loss": "weighted_cross_entropy",
+  "class_weight_power": 0.5,
+  "train_fraction": 1.0,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "dropout": 0.2,
+  "pretrained_baselines": true,
+  "num_workers": 2,
+  "device": "auto",
+  "calibrate": true,
+  "save_predictions": true,
+  "results_dir": "results/external_binary_source"
+}
