@@ -18,16 +18,23 @@ The code is for research reproducibility, not clinical diagnosis or deployment.
 The corrected split uses filename-derived subject-like grouping and exact-hash
 checks; authoritative patient identifiers were not available.
 
-## Data
+## Dataset availability
 
 Download the public Kermany dataset from [Mendeley Data, version 2](https://data.mendeley.com/datasets/rscbjbr9sj/2).
 Do not commit images or derived patient-level data. Expected layouts and label
 inference rules are documented in [`data/README.md`](data/README.md).
 
 VinDr-PCXR is optional and is used only as a frozen cross-dataset stress test.
-Access requires the user's PhysioNet credentials; set `VINDR_USER` and
-`VINDR_PASSWORD` as environment variables and never place credentials in a
-config file or commit history.
+Access requires the user's PhysioNet credentialed data-use process; set
+`VINDR_USER` and `VINDR_PASSWORD` as environment variables and never place
+credentials in a config file or commit history.
+
+## Code availability
+
+The source code, resolved configurations, and reproducibility instructions are
+available in this repository. This is separate from dataset availability: the
+repository does not redistribute patient images, credentials, or trained
+weights.
 
 ## Environment
 

@@ -1,6 +1,8 @@
-# Data Directory
+# Dataset Access Directory
 
-No dataset is stored in this repository.
+No dataset is stored in this repository. This file documents dataset access and
+the expected input layout only; the reproducible experiment source code is
+documented separately in the repository-level [`README.md`](../README.md).
 
 Expected external dataset examples:
 
