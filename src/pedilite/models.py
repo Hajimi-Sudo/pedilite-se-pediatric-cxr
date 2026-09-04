@@ -160,6 +160,8 @@ def build_model(name: str, num_classes: int, dropout: float = 0.2, pretrained_ba
         "efficientnet_v2_s",
         "convnext_tiny",
         "swin_t",
+        "swin_v2_t",
+        "maxvit_t",
         "densenet121",
         "resnet50",
     }:
@@ -191,6 +193,16 @@ def build_model(name: str, num_classes: int, dropout: float = 0.2, pretrained_ba
             weights = tvm.Swin_T_Weights.DEFAULT if pretrained_baselines else None
             model = tvm.swin_t(weights=weights)
             model.head = nn.Linear(model.head.in_features, num_classes)
+            return model
+        if name == "swin_v2_t":
+            weights = tvm.Swin_V2_T_Weights.DEFAULT if pretrained_baselines else None
+            model = tvm.swin_v2_t(weights=weights)
+            model.head = nn.Linear(model.head.in_features, num_classes)
+            return model
+        if name == "maxvit_t":
+            weights = tvm.MaxVit_T_Weights.DEFAULT if pretrained_baselines else None
+            model = tvm.maxvit_t(weights=weights)
+            model.classifier[-1] = nn.Linear(model.classifier[-1].in_features, num_classes)
             return model
         if name == "densenet121":
             weights = tvm.DenseNet121_Weights.DEFAULT if pretrained_baselines else None

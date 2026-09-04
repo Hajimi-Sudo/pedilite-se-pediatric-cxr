@@ -111,6 +111,11 @@ coverage are provided as separate configs:
    ConvNeXt-Tiny, Swin-T, and EfficientNetV2-S. These are reported as modern
    reference architectures rather than an unqualified state-of-the-art claim.
 
+   `configs/recent_sota_attention_weighted_3seed.json` evaluates Swin V2-T and
+   MaxViT-T as recent attention-model comparators. Their results should be
+   reported as measured reference points, not as universal SOTA claims from a
+   single public dataset.
+
 6. Use [`scripts/12_harden_results.py`](scripts/12_harden_results.py),
    [`scripts/14_seed_stats.py`](scripts/14_seed_stats.py), and
    [`scripts/18_diagnostic_metrics.py`](scripts/18_diagnostic_metrics.py) for
