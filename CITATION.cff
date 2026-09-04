@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: "PediLite-SE: Parameter-efficient attention CNN for pediatric chest radiograph classification"
+message: "If you use this code, please cite the associated manuscript."
+type: software
+authors:
+  - family-names: Liu
+    given-names: Cuicui
+  - family-names: Dong
+    given-names: Qiyu
+  - family-names: Liang
+    given-names: Weijun
+  - family-names: Wu
+    given-names: Shuang
+version: 0.1.0
+date-released: 2026-09-04
+repository-code: "https://github.com/Hajimi-Sudo/pedilite-se-pediatric-cxr"
+# Choose and add a repository license before making the repository public.

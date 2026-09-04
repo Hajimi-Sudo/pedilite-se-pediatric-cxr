@@ -1,0 +1,20 @@
+{
+  "run_name": "pilot_pedilite",
+  "data_root": "CHANGE_ME_TO_LOCAL_DATASET_PATH",
+  "label_mode": "auto",
+  "image_size": 224,
+  "model": "pedilite_eca",
+  "num_epochs": 5,
+  "checkpoint_metric": "val_macro_f1",
+  "train_fraction": 0.25,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "dropout": 0.2,
+  "pretrained_baselines": true,
+  "seed": 42,
+  "num_workers": 0,
+  "device": "auto",
+  "calibrate": true,
+  "results_dir": "results"
+}
