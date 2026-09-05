@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -73,6 +74,33 @@ class VinDrPCXRDataset:
         arr = np.transpose(arr, (2, 0, 1))
         return torch.from_numpy(arr), torch.tensor(int(row["target"]), dtype=torch.long), image_id
 
+    def materialize(self, max_workers: int = 8):
+        """Decode and normalize each DICOM once for reuse across frozen runs."""
+        import torch
+
+        items = [None] * len(self)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self.__getitem__, index): index for index in range(len(self))}
+            for future in futures:
+                items[futures[future]] = future.result()
+        images = torch.stack([item[0] for item in items])
+        labels = torch.stack([item[1] for item in items])
+        image_ids = [item[2] for item in items]
+        return CachedVinDrDataset(images, labels, image_ids)
+
+
+class CachedVinDrDataset:
+    def __init__(self, images, labels, image_ids):
+        self.images = images
+        self.labels = labels
+        self.image_ids = image_ids
+
+    def __len__(self):
+        return int(self.labels.shape[0])
+
+    def __getitem__(self, index: int):
+        return self.images[index], self.labels[index], self.image_ids[index]
+
 
 def evaluate_run(run_dir: Path, dataset: VinDrPCXRDataset, device_name: str, batch_size: int) -> dict:
     import torch
@@ -116,6 +144,12 @@ def evaluate_run(run_dir: Path, dataset: VinDrPCXRDataset, device_name: str, bat
     report = classification_report(y_true, y_pred, 2)
     report["class_names"] = ["non_pneumonia", "pneumonia"]
     report["auroc"] = macro_auroc(y_true, binary_probs, 2)
+    try:
+        from sklearn.metrics import average_precision_score
+
+        report["pr_auc"] = float(average_precision_score(y_true, pneumonia_prob))
+    except Exception:
+        report["pr_auc"] = None
     report["ece"] = expected_calibration_error(binary_probs, y_true)
     report["brier"] = brier_score_multiclass(binary_probs, y_true, 2)
     return {
@@ -157,6 +191,7 @@ def write_summary(results: list[dict], output_dir: Path) -> None:
             # one-vs-rest specificity of the pneumonia class.
             "specificity": metrics["per_class"][1]["specificity"],
             "auroc": metrics["auroc"],
+            "pr_auc": metrics["pr_auc"],
             "ece": metrics["ece"],
             "brier": metrics["brier"],
         })
@@ -179,6 +214,9 @@ def main() -> None:
     args = parser.parse_args()
 
     dataset = VinDrPCXRDataset(args.image_dir, args.labels, args.image_size)
+    print(f"materializing {len(dataset)} VinDr-PCXR images once", flush=True)
+    dataset = dataset.materialize()
+    print("materialization complete", flush=True)
     results = [
         evaluate_run(Path(run_dir), dataset, args.device, args.batch_size)
         for run_dir in args.run_dirs

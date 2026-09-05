@@ -9,6 +9,12 @@ ablation in which all squeeze-and-excitation (SE) blocks are removed
 (`pedilite_none`). It does not contain patient images, VinDr credentials, or
 trained weights.
 
+The repository also contains an unvalidated `pedilite_se_v2` upgrade protocol.
+The v2 backbone adds inverted-residual expansion, residual feature reuse, and a
+fifth compact stage while retaining SE recalibration. It is a follow-up experiment,
+not a replacement for the manuscript's v1 results until the server rerun and
+eval-only hardening are complete.
+
 ## Scope and limitations
 
 The Kermany-derived public data support image-level diagnostic categories:
@@ -116,6 +122,24 @@ coverage are provided as separate configs:
    reported as measured reference points, not as universal SOTA claims from a
    single public dataset.
 
+   `configs/pedilite_se_v2_matched_weighted_3seed.json` evaluates the v2 model
+   against a weighted MobileNetV3-small baseline under the same objective and
+   checkpoint rule. `configs/pedilite_se_v2_ablation_3seed.json` compares v2 with
+   its matched no-SE version.
+
+   `scripts/23_near_duplicate_audit.py` performs an additional cross-split
+   perceptual dHash screen; any flagged pairs require manual inspection and are
+   not silently removed from the reported split.
+
+   `configs/dual_domain_pedilite_se_3seed.json` and
+   `scripts/22_run_dual_domain.py` provide an optional shared-encoder,
+   dataset-specific-head experiment: Mendeley uses three classes and VinDr
+   uses binary pneumonia labels. VinDr must have independent train, validation,
+   and test label files. Its test labels must remain frozen and cannot be used
+   for loss, checkpoint, threshold, or architecture selection. If VinDr is
+   used for adaptation, a separate unseen dataset is required for an honest
+   external-transport test.
+
 6. Use [`scripts/12_harden_results.py`](scripts/12_harden_results.py),
    [`scripts/14_seed_stats.py`](scripts/14_seed_stats.py), and
    [`scripts/18_diagnostic_metrics.py`](scripts/18_diagnostic_metrics.py) for
@@ -132,14 +156,19 @@ identity mappings.
 
 ## Code map
 
-- `src/pedilite/models.py`: PediLite-SE, `pedilite_none`, and baselines.
-- `src/pedilite/data.py`: image discovery and label auditing.
+- `src/pedilite/models.py`: PediLite-SE v1/v2, matched no-SE variants, and baselines.
+- `src/pedilite/data.py`: image discovery and label auditing; label inference is
+  restricted to the class directory and filename to avoid parent-path token leakage.
 - `src/pedilite/train.py`: training, evaluation, and temperature scaling.
 - `src/pedilite/metrics.py`: performance and calibration metrics.
+- `src/pedilite/dual_domain.py`: shared compact encoder, dataset-specific heads,
+  and VinDr DICOM loader for the optional dual-domain study.
 - `scripts/15_prepare_subject_split.py`: corrected grouped split generation.
 - `scripts/13_split_integrity_audit.py`: cross-split ID/hash checks.
 - `scripts/02_run_experiment.py`: single- or multi-seed experiment runner.
 - `scripts/19_external_vindr_validation.py`: frozen VinDr stress test.
+- `scripts/22_run_dual_domain.py`: optional shared-encoder dual-domain training
+  with independent Mendeley and VinDr train/validation/test partitions.
 
 ## Reproducibility and publication status
 

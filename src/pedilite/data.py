@@ -27,7 +27,9 @@ def iter_images(root: Path) -> Iterable[Path]:
 
 
 def infer_label(path: Path, mode: str) -> str | None:
-    parts = [p.lower() for p in path.parts[-5:]]
+    # Restrict label inference to the class directory and filename. Including
+    # dataset-root names can silently leak tokens such as "viral" into labels.
+    parts = [path.parent.name.lower()]
     name = path.name.lower()
     token_text = " ".join(parts + [name])
     if "normal" in token_text:

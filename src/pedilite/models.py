@@ -20,6 +20,39 @@ class DepthwiseSeparableConv(nn.Module):
         return self.block(x)
 
 
+class InvertedResidualSE(nn.Module):
+    """Mobile inverted-residual block with channel recalibration."""
+
+    def __init__(self, in_ch: int, out_ch: int, stride: int = 1, expand_ratio: int = 2, use_se: bool = True):
+        super().__init__()
+        if stride not in {1, 2}:
+            raise ValueError(f"stride must be 1 or 2, got {stride}")
+        hidden = max(in_ch, int(round(in_ch * expand_ratio)))
+        layers = []
+        if hidden != in_ch:
+            layers.extend([
+                nn.Conv2d(in_ch, hidden, 1, bias=False),
+                nn.BatchNorm2d(hidden),
+                nn.Hardswish(inplace=True),
+            ])
+        layers.extend([
+            nn.Conv2d(hidden, hidden, 3, stride=stride, padding=1, groups=hidden, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.Hardswish(inplace=True),
+            nn.Conv2d(hidden, out_ch, 1, bias=False),
+            nn.BatchNorm2d(out_ch),
+        ])
+        if use_se:
+            # Insert channel recalibration before the pointwise projection.
+            layers.insert(-2, SEBlock(hidden))
+        self.block = nn.Sequential(*layers)
+        self.use_residual = stride == 1 and in_ch == out_ch
+
+    def forward(self, x):
+        y = self.block(x)
+        return x + y if self.use_residual else y
+
+
 class SEBlock(nn.Module):
     def __init__(self, channels: int, reduction: int = 8):
         super().__init__()
@@ -132,6 +165,43 @@ class PediLiteAttnNet(nn.Module):
         return self.head(self.blocks(self.stem(x)))
 
 
+class PediLiteSEV2(nn.Module):
+    """Higher-capacity compact backbone for the upgrade protocol.
+
+    The v2 model keeps channel attention but adds inverted-residual expansion,
+    residual feature reuse, and a fifth compact stage. It is intentionally
+    separate from the submitted v1 model so existing results remain reproducible.
+    """
+
+    def __init__(self, num_classes: int, dropout: float = 0.2, width_mult: float = 1.0, use_se: bool = True):
+        super().__init__()
+        if width_mult <= 0:
+            raise ValueError(f"width_mult must be positive, got {width_mult}")
+        channels = [max(8, int(round(ch * width_mult))) for ch in [16, 24, 40, 64, 96]]
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, channels[0], 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(channels[0]),
+            nn.Hardswish(inplace=True),
+        )
+        specs = [
+            (channels[0], channels[1], 2, 2),
+            (channels[1], channels[2], 2, 2),
+            (channels[2], channels[3], 2, 2),
+            (channels[3], channels[4], 2, 2),
+            (channels[4], channels[4], 1, 2),
+        ]
+        self.blocks = nn.Sequential(*(InvertedResidualSE(*spec, use_se=use_se) for spec in specs))
+        self.head = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Dropout(dropout),
+            nn.Linear(channels[-1], num_classes),
+        )
+
+    def forward(self, x):
+        return self.head(self.blocks(self.stem(x)))
+
+
 def parse_pedilite_name(name: str) -> tuple[str, float]:
     parts = name.split("_")
     if len(parts) < 2 or parts[0] != "pedilite":
@@ -148,10 +218,24 @@ def parse_pedilite_name(name: str) -> tuple[str, float]:
     return attention, width_mult
 
 
+def parse_pedilite_v2_name(name: str) -> float:
+    prefix = "pedilite_se_v2"
+    if name == prefix:
+        return 1.0
+    if not name.startswith(prefix + "_w"):
+        raise ValueError(f"invalid PediLite v2 model name: {name}")
+    return float(name[len(prefix) + 2 :])
+
+
 def build_model(name: str, num_classes: int, dropout: float = 0.2, pretrained_baselines: bool = True) -> nn.Module:
     if name == "small_cnn":
         return SmallCNN(num_classes=num_classes, dropout=dropout)
     if name.startswith("pedilite_"):
+        if name in {"pedilite_se_v2", "pedilite_se_v2_none"} or name.startswith("pedilite_se_v2_w"):
+            use_se = name != "pedilite_se_v2_none"
+            width_name = name.replace("_none", "")
+            width_mult = parse_pedilite_v2_name(width_name)
+            return PediLiteSEV2(num_classes=num_classes, dropout=dropout, width_mult=width_mult, use_se=use_se)
         attention, width_mult = parse_pedilite_name(name)
         return PediLiteAttnNet(num_classes=num_classes, attention=attention, dropout=dropout, width_mult=width_mult)
     if name in {
