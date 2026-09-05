@@ -9,11 +9,12 @@ ablation in which all squeeze-and-excitation (SE) blocks are removed
 (`pedilite_none`). It does not contain patient images, VinDr credentials, or
 trained weights.
 
-The repository also contains an unvalidated `pedilite_se_v2` upgrade protocol.
-The v2 backbone adds inverted-residual expansion, residual feature reuse, and a
-fifth compact stage while retaining SE recalibration. It is a follow-up experiment,
-not a replacement for the manuscript's v1 results until the server rerun and
-eval-only hardening are complete.
+The repository also contains the `pedilite_se_v2` protocol used in the current
+Children manuscript. The v2 backbone adds inverted-residual expansion, residual
+feature reuse, and a fifth compact stage while retaining SE recalibration. Its
+corrected-split matched-seed results and frozen VinDr-PCXR stress-test outputs are
+reported in the manuscript; the optional dual-domain adaptation protocol remains
+unvalidated and is not part of the primary claims.
 
 ## Scope and limitations
 
