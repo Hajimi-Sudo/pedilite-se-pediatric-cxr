@@ -1,7 +1,11 @@
 {
+  "run_name": "pedilite_ms_kd_efficientnet_b0",
   "data_root": "CHANGE_ME_TO_CORRECTED_SPLIT_PATH",
   "label_mode": "three_class",
   "image_size": 224,
+  "models": [
+    "pedilite_ms"
+  ],
   "seeds": [
     42,
     2026,
@@ -12,6 +16,8 @@
   "loss": "weighted_cross_entropy",
   "class_weight_power": 0.5,
   "train_fraction": 1.0,
+  "batch_size": 32,
+  "learning_rate": 0.001,
   "weight_decay": 0.0001,
   "dropout": 0.2,
   "pretrained_baselines": true,
@@ -19,13 +25,9 @@
   "device": "auto",
   "calibrate": true,
   "save_predictions": true,
-  "run_name": "recent_models_weighted",
-  "models": [
-    "convnext_tiny",
-    "swin_t",
-    "efficientnet_v2_s"
-  ],
-  "batch_size": 8,
-  "learning_rate": 0.0003,
-  "results_dir": "results/recent_models_weighted"
+  "teacher_model": "efficientnet_b0",
+  "teacher_checkpoint": "CHANGE_ME_TO_TEACHER_CHECKPOINT",
+  "kd_alpha": 0.5,
+  "kd_temperature": 4.0,
+  "results_dir": "results/pedilite_ms_kd_efficientnet_b0"
 }

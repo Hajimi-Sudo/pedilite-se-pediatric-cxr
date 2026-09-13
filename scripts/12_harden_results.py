@@ -457,6 +457,9 @@ def make_gradcam_figure(run_dir: Path, out_path: Path, device_name: str, max_cas
 
     pred_record = collect_run_predictions(run_dir, device_name, int(config.get("batch_size", 32)))
     selected: list[int] = []
+    # Keep the qualitative audit deterministic and transparent: one correctly
+    # classified test image per class, then the first misclassified images.
+    # This is deliberately not a cherry-picked set of only favorable cases.
     for class_id in range(len(class_names)):
         matches = np.flatnonzero((pred_record.labels == class_id) & (pred_record.preds == class_id))
         if len(matches):

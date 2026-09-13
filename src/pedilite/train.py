@@ -63,21 +63,57 @@ def make_loaders(config: dict, mode: str):
     return datasets, loaders
 
 
-def run_epoch(model, loader, criterion, optimizer, device):
+def _unpack_model_output(output):
+    if isinstance(output, dict):
+        logits = output["logits"]
+        extras = {
+            "exit_logits": output.get("exit_logits"),
+            "full_logits": output.get("full_logits"),
+            "p_full": output.get("p_full"),
+        }
+        return logits, extras
+    return output, {}
+
+
+def run_epoch(model, loader, criterion, optimizer, device, teacher=None, kd_alpha=0.0, kd_temperature=4.0):
     import torch
+    import torch.nn.functional as F
 
     model.train()
+    if teacher is not None:
+        teacher.eval()
     losses = []
+    p_full_values = []
     for images, labels, _paths in loader:
         images = images.to(device)
         labels = labels.to(device)
         optimizer.zero_grad(set_to_none=True)
-        logits = model(images)
+        need_aux = bool(getattr(model, "adaptive_compute", False) or getattr(model, "auxiliary_outputs", False))
+        logits, extras = _unpack_model_output(model(images, return_aux=True) if need_aux else model(images))
         loss = criterion(logits, labels)
+        if extras.get("logits_224") is not None and extras.get("logits_160") is not None:
+            aux_w = float(getattr(model, "aux_weight", 0.5))
+            loss = criterion(extras["logits_224"], labels) + aux_w * criterion(extras["logits_160"], labels)
+        elif extras.get("exit_logits") is not None and getattr(model, "aux_weight", 0.0) > 0:
+            loss = loss + float(model.aux_weight) * criterion(extras["exit_logits"], labels)
+        if extras.get("p_full") is not None and getattr(model, "cost_weight", 0.0) > 0:
+            loss = loss + float(model.cost_weight) * extras["p_full"].mean()
+            p_full_values.append(float(extras["p_full"].detach().mean().cpu()))
+        if teacher is not None and float(kd_alpha) > 0:
+            with torch.no_grad():
+                teacher_logits = teacher(images)
+            temperature = float(kd_temperature)
+            student_log_probs = F.log_softmax(logits / temperature, dim=1)
+            teacher_probs = F.softmax(teacher_logits / temperature, dim=1)
+            kd_loss = F.kl_div(student_log_probs, teacher_probs, reduction="batchmean") * (temperature ** 2)
+            loss = (1.0 - float(kd_alpha)) * loss + float(kd_alpha) * kd_loss
         loss.backward()
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
-    return float(np.mean(losses)) if losses else 0.0
+    mean_loss = float(np.mean(losses)) if losses else 0.0
+    if p_full_values:
+        return mean_loss
+    return mean_loss
 
 
 def collect_logits(model, loader, device):
@@ -85,12 +121,23 @@ def collect_logits(model, loader, device):
 
     model.eval()
     logits_all, labels_all = [], []
+    p_full_all = []
     with torch.no_grad():
         for images, labels, _paths in loader:
-            logits = model(images.to(device)).detach().cpu().numpy()
-            logits_all.append(logits)
+            need_aux = bool(getattr(model, "adaptive_compute", False) or getattr(model, "auxiliary_outputs", False))
+            output = model(images.to(device), return_aux=True) if need_aux else model(images.to(device))
+            logits, extras = _unpack_model_output(output)
+            logits_all.append(logits.detach().cpu().numpy())
             labels_all.append(labels.numpy())
-    return np.concatenate(logits_all, axis=0), np.concatenate(labels_all, axis=0)
+            if extras.get("p_full") is not None:
+                p_full_all.append(extras["p_full"].detach().cpu().numpy())
+    logits_cat = np.concatenate(logits_all, axis=0)
+    labels_cat = np.concatenate(labels_all, axis=0)
+    if p_full_all:
+        collect_logits.last_p_full = np.concatenate(p_full_all, axis=0)
+    else:
+        collect_logits.last_p_full = None
+    return logits_cat, labels_cat
 
 
 def collect_logits_with_paths(model, loader, device):
@@ -99,11 +146,18 @@ def collect_logits_with_paths(model, loader, device):
 
     model.eval()
     logits_all, labels_all, paths_all = [], [], []
+    p_full_all = []
     with torch.no_grad():
         for images, labels, paths in loader:
-            logits_all.append(model(images.to(device)).detach().cpu().numpy())
+            need_aux = bool(getattr(model, "adaptive_compute", False) or getattr(model, "auxiliary_outputs", False))
+            output = model(images.to(device), return_aux=True) if need_aux else model(images.to(device))
+            logits, extras = _unpack_model_output(output)
+            logits_all.append(logits.detach().cpu().numpy())
             labels_all.append(labels.numpy())
             paths_all.extend(str(path) for path in paths)
+            if extras.get("p_full") is not None:
+                p_full_all.append(extras["p_full"].detach().cpu().numpy())
+    collect_logits_with_paths.last_p_full = np.concatenate(p_full_all, axis=0) if p_full_all else None
     return (
         np.concatenate(logits_all, axis=0),
         np.concatenate(labels_all, axis=0),
@@ -226,6 +280,21 @@ def run_experiment(config: dict) -> dict:
         dropout=float(config.get("dropout", 0.2)),
         pretrained_baselines=bool(config.get("pretrained_baselines", True)),
     ).to(device)
+    teacher = None
+    teacher_name = config.get("teacher_model")
+    teacher_checkpoint = config.get("teacher_checkpoint")
+    if teacher_name and teacher_checkpoint:
+        teacher = build_model(
+            str(teacher_name),
+            num_classes,
+            dropout=float(config.get("dropout", 0.2)),
+            pretrained_baselines=False,
+        ).to(device)
+        state = torch.load(teacher_checkpoint, map_location=device, weights_only=True)
+        teacher.load_state_dict(state)
+        teacher.eval()
+        for param in teacher.parameters():
+            param.requires_grad = False
     criterion = build_criterion(config, datasets["train"], num_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -247,7 +316,16 @@ def run_experiment(config: dict) -> dict:
     best_checkpoint_path = run_dir / "best_model.pt"
     history = []
     for epoch in range(1, int(config.get("num_epochs", 5)) + 1):
-        train_loss = run_epoch(model, loaders["train"], criterion, optimizer, device)
+        train_loss = run_epoch(
+            model,
+            loaders["train"],
+            criterion,
+            optimizer,
+            device,
+            teacher=teacher,
+            kd_alpha=float(config.get("kd_alpha", 0.0)),
+            kd_temperature=float(config.get("kd_temperature", 4.0)),
+        )
         val_logits, val_labels = collect_logits(model, loaders["val"], device)
         val_report = evaluate_from_logits(val_logits, val_labels, num_classes)
         history_row = {
@@ -294,6 +372,11 @@ def run_experiment(config: dict) -> dict:
             class_names,
         )
     test_report = evaluate_from_logits(test_logits, test_labels, num_classes, temperature=temperature)
+    p_full = getattr(collect_logits_with_paths, "last_p_full", None)
+    if p_full is not None:
+        route_threshold = float(getattr(model, "route_threshold", 0.5))
+        test_report["p_full_mean"] = float(np.mean(p_full))
+        test_report["full_path_rate"] = float(np.mean(p_full >= route_threshold))
 
     metrics = {
         "run_name": config["run_name"],
@@ -305,7 +388,10 @@ def run_experiment(config: dict) -> dict:
         "dataset_sizes": {k: len(v) for k, v in datasets.items()},
         "parameters": count_parameters(model),
         "flops": estimate_flops(model, int(config.get("image_size", 224)), device),
+        "flops_cheap": int(getattr(model, "flops_cheap", 0) or 0) or None,
+        "flops_full": int(getattr(model, "flops_full", 0) or 0) or None,
         "latency_ms": measure_latency_ms(model, int(config.get("image_size", 224)), device),
+        "adaptive_compute": bool(getattr(model, "adaptive_compute", False)),
         "history": history,
         "checkpoint_metric": checkpoint_metric,
         "best_epoch": best_epoch,

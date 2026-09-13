@@ -19,13 +19,11 @@
   "device": "auto",
   "calibrate": true,
   "save_predictions": true,
-  "run_name": "recent_models_weighted",
+  "run_name": "pedilite_ms_matched_weighted",
   "models": [
-    "convnext_tiny",
-    "swin_t",
-    "efficientnet_v2_s"
+    "pedilite_ms"
   ],
-  "batch_size": 8,
-  "learning_rate": 0.0003,
-  "results_dir": "results/recent_models_weighted"
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "results_dir": "results/pedilite_ms_matched_weighted"
 }

@@ -19,13 +19,13 @@
   "device": "auto",
   "calibrate": true,
   "save_predictions": true,
-  "run_name": "recent_models_weighted",
+  "run_name": "light_family_weighted",
   "models": [
-    "convnext_tiny",
-    "swin_t",
-    "efficientnet_v2_s"
+    "mobilenet_v2",
+    "shufflenet_v2_x1_0",
+    "efficientnet_b0"
   ],
-  "batch_size": 8,
+  "batch_size": 16,
   "learning_rate": 0.0003,
-  "results_dir": "results/recent_models_weighted"
+  "results_dir": "results/light_family_weighted"
 }

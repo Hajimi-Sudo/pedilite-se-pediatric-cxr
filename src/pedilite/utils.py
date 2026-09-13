@@ -46,20 +46,16 @@ def count_parameters(model) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def estimate_flops(model, image_size: int = 224, device=None) -> int:
+def _count_forward_flops(model, image_size: int, device) -> int:
     import torch
     from torch import nn
-
-    if device is None:
-        device = next(model.parameters()).device
 
     flops = 0
     hooks = []
 
     def conv_hook(module, _inputs, output):
         nonlocal flops
-        out = output
-        batch, out_ch, out_h, out_w = out.shape
+        batch, out_ch, out_h, out_w = output.shape
         kernel_h, kernel_w = module.kernel_size
         in_ch = module.in_channels
         groups = module.groups
@@ -75,17 +71,37 @@ def estimate_flops(model, image_size: int = 224, device=None) -> int:
             hooks.append(module.register_forward_hook(conv_hook))
         elif isinstance(module, nn.Linear):
             hooks.append(module.register_forward_hook(linear_hook))
-
-    was_training = model.training
-    model.eval()
     with torch.no_grad():
         dummy = torch.zeros(1, 3, image_size, image_size, device=device)
         model(dummy)
-    if was_training:
-        model.train()
     for hook in hooks:
         hook.remove()
     return flops
+
+
+def estimate_flops(model, image_size: int = 224, device=None) -> int:
+    import torch
+
+    if device is None:
+        device = next(model.parameters()).device
+
+    was_training = model.training
+    model.eval()
+    try:
+        if getattr(model, "adaptive_compute", False):
+            prev = getattr(model, "compute_mode", "route")
+            model.compute_mode = "cheap"
+            cheap = _count_forward_flops(model, image_size, device)
+            model.compute_mode = "full"
+            full = _count_forward_flops(model, image_size, device)
+            model.compute_mode = prev
+            model.flops_cheap = cheap
+            model.flops_full = full
+            return int(full)
+        return _count_forward_flops(model, image_size, device)
+    finally:
+        if was_training:
+            model.train()
 
 
 def measure_latency_ms(model, image_size: int = 224, device=None, warmup: int = 10, repeats: int = 30) -> float:
